@@ -1,0 +1,31 @@
+:root {
+  --color-primary: linear-gradien #FD7E15;
+  --color-primary-end: #FE6901;
+  --color-primary-soft: #FFF0E6;
+  --color-text: #1A1A1A;
+  --color-text-secondary: #7E7E7E;
+  --color-background: #F8F9FA;
+  --color-background-element: #FFFFFF;
+  --color-background-selected: #FFF0E6;
+  --color-border: #EBEBEB;
+
+  --font-display:
+    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
+    Segoe UI Symbol, Noto Color Emoji;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
+  --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary-soft: #2E1E12;
+    --color-text: #FFFFFF;
+    --color-text-secondary: #999999;
+    --color-background: #121212;
+    --color-background-element: #1E1E1E;
+    --color-background-selected: #2A1C14;
+    --color-border: #2C2C2C;
+  }
+}
