@@ -9,6 +9,8 @@ export default function VerifyOtpScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const phone = params.phone || '+234 812 345 6789';
+  const name = params.name as string;
+  const email = params.email as string;
   const colors = Colors.light;
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -43,7 +45,18 @@ export default function VerifyOtpScreen() {
   };
 
   const handleVerify = () => {
-    router.push('/(auth)/setup-pin');
+    // In production, verify OTP with backend
+    const otpCode = otp.join('');
+    if (otpCode.length !== 6) {
+      alert('Please enter the complete 6-digit code');
+      return;
+    }
+    
+    // Pass user data to PIN setup
+    router.push({
+      pathname: '/(auth)/setup-pin',
+      params: { name, email, phone },
+    });
   };
 
   const handleResend = () => {

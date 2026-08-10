@@ -15,6 +15,13 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
 
   const handleLogin = () => {
+    // In production, validate credentials with backend
+    if (!identifier || !password) {
+      alert('Please enter your email/phone and password');
+      return;
+    }
+    
+    // Navigate to PIN entry for returning users
     router.push('/(auth)/enter-pin');
   };
 

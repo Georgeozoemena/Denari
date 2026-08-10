@@ -1,9 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Elevation, FontWeight, IconSize, Layout, Radius, Spacing, Typography } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
+import { exportBudgetsCSV, exportSavingsGoalsCSV, exportTransactionsCSV } from '@/services/export';
+import { formatCurrency } from '@/utils/currency';
 
 const MENU_ITEMS = [
   {
@@ -31,6 +44,14 @@ const MENU_ITEMS = [
     ],
   },
   {
+    title: 'Data',
+    items: [
+      { label: 'Export Transactions', icon: 'download-outline', action: 'export-transactions' },
+      { label: 'Export Budgets', icon: 'download-outline', action: 'export-budgets' },
+      { label: 'Export Savings Goals', icon: 'download-outline', action: 'export-goals' },
+    ],
+  },
+  {
     title: 'Support',
     items: [
       { label: 'About DENARI', icon: 'information-circle-outline', route: '/about' },
@@ -43,67 +64,131 @@ const MENU_ITEMS = [
 export default function ProfileScreen() {
   const router = useRouter();
   const colors = Colors.light;
+  const { transactions, budgets, savingsGoals, user } = useApp();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const cardBorder = { borderWidth: 1, borderColor: colors.border };
+  const userCurrency = user?.currency || 'NGN';
+  const monthlyIncome = budgets[0]?.monthlyIncome || 0;
+
+  const handleExport = async (action: string) => {
+    setIsExporting(true);
+    try {
+      switch (action) {
+        case 'export-transactions':
+          if (transactions.length === 0) {
+            Alert.alert('No Data', 'You have no transactions to export');
+            break;
+          }
+          await exportTransactionsCSV(transactions);
+          Alert.alert('Success', 'Transactions exported successfully!');
+          break;
+        case 'export-budgets':
+          if (budgets.length === 0) {
+            Alert.alert('No Data', 'You have no budgets to export');
+            break;
+          }
+          await exportBudgetsCSV(budgets);
+          Alert.alert('Success', 'Budgets exported successfully!');
+          break;
+        case 'export-goals':
+          if (savingsGoals.length === 0) {
+            Alert.alert('No Data', 'You have no savings goals to export');
+            break;
+          }
+          await exportSavingsGoalsCSV(savingsGoals);
+          Alert.alert('Success', 'Savings goals exported successfully!');
+          break;
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      Alert.alert('Export Failed', 'Failed to export data. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleMenuItemPress = (item: { action?: string; route?: string }) => {
+    if (item.action) {
+      handleExport(item.action);
+    } else if (item.route) {
+      console.log(item.route);
+    }
+  };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Profile Header */}
-      <LinearGradient
-        colors={[colors.primary, colors.primaryEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.profileHeader}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={40} color="#FFFFFF" />
-          </View>
-          <Pressable style={styles.editButton}>
-            <Ionicons name="camera" size={16} color="#FFFFFF" />
-          </Pressable>
-        </View>
-        <Text style={styles.userName}>Miracle Adeosun</Text>
-        <Text style={styles.userEmail}>miracle@denari.app</Text>
-      </LinearGradient>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.backgroundSubtle }]}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContent}>
+      <Text style={[styles.pageTitle, { color: colors.text }]}>Profile</Text>
 
-      {/* Account Overview */}
-      <View style={[styles.statsContainer, { backgroundColor: colors.backgroundElevated }]}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>₦350,000</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Budget</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>₦250,000</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Spent</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>42</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Transactions</Text>
+      {/* Split profile card */}
+      <View style={[styles.profileCardWrapper, cardBorder, Elevation.card]}>
+        <LinearGradient
+          colors={[colors.primary, colors.primaryHover]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.profileCardTop}>
+          <View style={styles.avatarContainer}>
+            {user?.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={36} color="#FFFFFF" />
+              </View>
+            )}
+            <Pressable style={[styles.editAvatarButton, { backgroundColor: colors.backgroundElevated }]}>
+              <Ionicons name="camera" size={14} color={colors.primary} />
+            </Pressable>
+          </View>
+          <Text style={styles.userName}>{user?.name || 'User'}</Text>
+          <Text style={styles.userEmail}>{user?.email || 'email@denari.app'}</Text>
+        </LinearGradient>
+
+        <View style={[styles.statsContainer, { backgroundColor: colors.backgroundElevated }]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {formatCurrency(monthlyIncome, userCurrency)}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Income</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: colors.text }]}>{savingsGoals.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Goals</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: colors.text }]}>{transactions.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Transactions</Text>
+          </View>
         </View>
       </View>
 
-      {/* Menu Items */}
-      {MENU_ITEMS.map((section, index) => (
-        <View key={index} style={styles.menuSection}>
-          <Text style={[styles.menuSectionTitle, { color: colors.textSecondary }]}>
-            {section.title}
-          </Text>
-          <View style={[styles.menuCard, { backgroundColor: colors.backgroundElevated }]}>
+      {/* Menu sections as list bars */}
+      {MENU_ITEMS.map((section) => (
+        <View key={section.title} style={styles.menuSection}>
+          <Text style={[styles.menuSectionTitle, { color: colors.textSecondary }]}>{section.title}</Text>
+          <View style={[styles.menuGroup, cardBorder, { backgroundColor: colors.backgroundElevated }]}>
             {section.items.map((item, itemIndex) => (
-              <View key={itemIndex}>
+              <View key={item.label}>
                 <Pressable
                   style={styles.menuItem}
-                  onPress={() => console.log(item.route)}>
-                  <View style={styles.menuItemLeft}>
-                    <Ionicons name={item.icon as any} size={22} color={colors.text} />
-                    <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                      {item.label}
-                    </Text>
+                  onPress={() => handleMenuItemPress(item)}
+                  disabled={isExporting && !!item.action}>
+                  <View style={[styles.menuItemIcon, { backgroundColor: colors.primarySoft }]}>
+                    <Ionicons name={item.icon as any} size={IconSize.sm} color={colors.primary} />
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>{item.label}</Text>
+                  {isExporting && item.action ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={IconSize.md} color={colors.textTertiary} />
+                  )}
                 </Pressable>
                 {itemIndex < section.items.length - 1 && (
-                  <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                  <View style={[styles.menuDivider, { backgroundColor: colors.borderLight }]} />
                 )}
               </View>
             ))}
@@ -111,12 +196,14 @@ export default function ProfileScreen() {
         </View>
       ))}
 
-      {/* Logout Button */}
       <Pressable
-        style={[styles.logoutButton, { backgroundColor: colors.backgroundElevated }]}
+        style={[styles.logoutButton, cardBorder, { backgroundColor: colors.backgroundElevated }]}
         onPress={() => router.replace('/(auth)/welcome')}>
-        <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
-        <Text style={styles.logoutText}>Log Out</Text>
+        <View style={[styles.logoutIcon, { backgroundColor: colors.expenseSoft }]}>
+          <Ionicons name="log-out-outline" size={IconSize.sm} color={colors.expense} />
+        </View>
+        <Text style={[styles.logoutText, { color: colors.expense }]}>Log Out</Text>
+        <Ionicons name="chevron-forward" size={IconSize.md} color={colors.textTertiary} />
       </Pressable>
 
       <View style={{ height: 100 }} />
@@ -125,127 +212,124 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  profileHeader: {
-    padding: 24,
+  container: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: Layout.screenPadding,
     paddingTop: 60,
-    paddingBottom: 32,
+  },
+  pageTitle: {
+    ...Typography.heading,
+    marginBottom: Spacing.lg,
+  },
+  profileCardWrapper: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    marginBottom: Spacing.xl,
+  },
+  profileCardTop: {
+    padding: Spacing.xl,
     alignItems: 'center',
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   avatar: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
   },
-  editButton: {
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.full,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  editAvatarButton: {
     position: 'absolute',
     bottom: 0,
     right: 0,
     width: 28,
     height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FD7E15',
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
   },
   userName: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: FontWeight.bold,
     color: '#FFFFFF',
     marginBottom: 4,
   },
   userEmail: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   statsContainer: {
     flexDirection: 'row',
-    marginHorizontal: 24,
-    marginTop: -20,
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    padding: Spacing.lg,
   },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-  },
-  statDivider: {
-    width: 1,
-    height: '100%',
-  },
-  menuSection: {
-    paddingHorizontal: 24,
-    marginTop: 24,
-  },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 16, fontWeight: FontWeight.bold, marginBottom: 4 },
+  statLabel: { ...Typography.small, fontWeight: FontWeight.regular },
+  statDivider: { width: 1, height: '100%' },
+  menuSection: { marginBottom: Spacing.lg },
   menuSectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...Typography.small,
+    fontWeight: FontWeight.semibold,
     textTransform: 'uppercase',
-    marginBottom: 12,
     letterSpacing: 0.5,
+    marginBottom: Spacing.sm,
+    marginLeft: Spacing.xs,
   },
-  menuCard: {
-    borderRadius: 8,
+  menuGroup: {
+    borderRadius: Radius.lg,
     overflow: 'hidden',
+    ...Elevation.soft,
   },
   menuItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: Spacing.lg,
+    gap: Spacing.md,
   },
-  menuItemLeft: {
-    flexDirection: 'row',
+  menuItemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
   },
   menuItemLabel: {
-    fontSize: 15,
-    fontWeight: '500',
+    flex: 1,
+    ...Typography.body,
+    fontWeight: FontWeight.medium,
   },
-  menuDivider: {
-    height: 1,
-    marginLeft: 50,
-  },
+  menuDivider: { height: 1, marginLeft: 68 },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
+    gap: Spacing.md,
+    ...Elevation.soft,
+  },
+  logoutIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
     justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 24,
-    marginTop: 24,
-    padding: 16,
-    borderRadius: 8,
+    alignItems: 'center',
   },
   logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FF3B30',
+    flex: 1,
+    ...Typography.body,
+    fontWeight: FontWeight.semibold,
   },
 });

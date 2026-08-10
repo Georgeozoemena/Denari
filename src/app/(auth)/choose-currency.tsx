@@ -1,22 +1,38 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Colors } from '@/constants/theme';
-
-const CURRENCIES = [
-  { code: 'NGN', name: 'Nigerian Naira', flag: '🇳🇬', symbol: '₦' },
-  { code: 'USD', name: 'US Dollar', flag: '🇺🇸', symbol: '$' },
-  { code: 'EUR', name: 'Euro', flag: '🇪🇺', symbol: '€' },
-  { code: 'GBP', name: 'British Pound', flag: '🇬🇧', symbol: '£' },
-];
+import { useApp } from '@/context/AppContext';
+import { CURRENCIES } from '@/utils/currency';
 
 export default function ChooseCurrencyScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const colors = Colors.light;
+  const { setUser } = useApp();
+
+  const name = params.name as string;
+  const email = params.email as string;
+  const phone = params.phone as string;
 
   const [selected, setSelected] = useState('NGN');
+
+  const handleContinue = () => {
+    // Create user profile with onboarding incomplete (will complete on success screen)
+    setUser({
+      id: Date.now().toString(),
+      name: name || 'User',
+      email: email || '',
+      phone: phone || '',
+      currency: selected,
+      hasCompletedOnboarding: false,
+      createdAt: new Date().toISOString(),
+    });
+    
+    router.push('/(auth)/success');
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -64,7 +80,7 @@ export default function ChooseCurrencyScreen() {
 
       <Button
         title="Continue"
-        onPress={() => router.push('/(auth)/profile-setup')}
+        onPress={handleContinue}
         style={styles.submitBtn}
       />
     </View>

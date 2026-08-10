@@ -6,6 +6,8 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { Button } from '@/components/ui/button';
 import { Colors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { formScreenStyles as fs } from '@/styles/form-screen';
+import { getCurrencySymbol } from '@/utils/currency';
 
 const CATEGORIES = [
   { id: 'food', name: 'Food & Dining', icon: 'restaurant' },
@@ -14,359 +16,299 @@ const CATEGORIES = [
   { id: 'entertainment', name: 'Entertainment', icon: 'film' },
   { id: 'bills', name: 'Bills', icon: 'receipt' },
   { id: 'health', name: 'Health', icon: 'medkit' },
-];
-
-const PAYMENT_METHODS = [
-  { id: 'gtbank', name: 'GTBank •••• 5678', icon: 'card' },
-  { id: 'cash', name: 'Cash', icon: 'cash' },
-  { id: 'zenith', name: 'Zenith Bank •••• 1234', icon: 'card' },
-  { id: 'access', name: 'Access Bank •••• 9012', icon: 'card' },
+  { id: 'other', name: 'Other', icon: 'ellipse' },
 ];
 
 export default function AddExpenseScreen() {
   const router = useRouter();
   const colors = Colors.light;
-  const { addTransaction } = useApp();
+  const { addTransaction, wallets, user, budgets } = useApp();
 
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('food');
-  const [date, setDate] = useState(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }));
-  const [paymentMethod, setPaymentMethod] = useState('gtbank');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [walletId, setWalletId] = useState(wallets[0]?.id || '');
   const [notes, setNotes] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [showPaymentPicker, setShowPaymentPicker] = useState(false);
+  const [showWalletPicker, setShowWalletPicker] = useState(false);
 
-  const selectedCategory = CATEGORIES.find(c => c.id === category);
-  const selectedPayment = PAYMENT_METHODS.find(p => p.id === paymentMethod);
+  const selectedCategory = CATEGORIES.find((c) => c.id === category);
+  const selectedWallet = wallets.find((w) => w.id === walletId);
+  const currencySymbol = getCurrencySymbol(user?.currency);
 
   const handleSave = () => {
-    // Validate amount
     const numAmount = parseFloat(amount.replace(/,/g, ''));
     if (!amount || isNaN(numAmount) || numAmount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount');
       return;
     }
 
-    // Save transaction
-    addTransaction({
-      type: 'expense',
-      amount: numAmount,
-      category: selectedCategory?.name || 'Other',
-      date: new Date().toISOString(),
-      notes,
-      paymentMethod: selectedPayment?.name || 'Cash',
-    });
+    if (!walletId || !selectedWallet) {
+      Alert.alert('Select Wallet', 'Please select a wallet for this expense');
+      return;
+    }
 
-    Alert.alert('Success', 'Expense added successfully!');
-    router.back();
+    if (selectedWallet.balance < numAmount) {
+      Alert.alert(
+        'Insufficient Balance',
+        `${selectedWallet.name} has only ${currencySymbol}${selectedWallet.balance.toLocaleString()}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue Anyway', onPress: () => checkBudgetAndSave(numAmount) },
+        ],
+      );
+      return;
+    }
+
+    checkBudgetAndSave(numAmount);
   };
 
-  const selectCategory = (categoryId: string) => {
-    setCategory(categoryId);
-    setShowCategoryPicker(false);
+  const checkBudgetAndSave = (numAmount: number) => {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const currentBudget = budgets.find((b) => b.month === currentMonth);
+
+    if (!currentBudget) {
+      saveExpense(numAmount);
+      return;
+    }
+
+    const budgetCategory = currentBudget.categories.find((cat) => cat.name === selectedCategory?.name);
+
+    if (!budgetCategory) {
+      saveExpense(numAmount);
+      return;
+    }
+
+    const newTotal = budgetCategory.spent + numAmount;
+    const percentage = (newTotal / budgetCategory.allocated) * 100;
+
+    if (newTotal > budgetCategory.allocated) {
+      const overAmount = newTotal - budgetCategory.allocated;
+      Alert.alert(
+        'Budget Alert',
+        `This expense will put you over budget:\n\nCategory: ${budgetCategory.name}\nCurrent: ${currencySymbol}${budgetCategory.spent.toLocaleString()} / ${currencySymbol}${budgetCategory.allocated.toLocaleString()}\nNew expense: ${currencySymbol}${numAmount.toLocaleString()}\nAfter: ${currencySymbol}${newTotal.toLocaleString()} (${currencySymbol}${overAmount.toLocaleString()} over)\n\nContinue anyway?`,
+        [
+          { text: 'Go Back', style: 'cancel' },
+          { text: 'Save Anyway', onPress: () => saveExpense(numAmount), style: 'destructive' },
+        ],
+      );
+      return;
+    }
+
+    if (percentage >= 80) {
+      const remaining = budgetCategory.allocated - newTotal;
+      Alert.alert(
+        'Budget Notice',
+        `You've used ${percentage.toFixed(0)}% of your ${budgetCategory.name} budget.\n\nSpent: ${currencySymbol}${newTotal.toLocaleString()}\nBudget: ${currencySymbol}${budgetCategory.allocated.toLocaleString()}\nRemaining: ${currencySymbol}${remaining.toLocaleString()}\n\nContinue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => saveExpense(numAmount) },
+        ],
+      );
+      return;
+    }
+
+    saveExpense(numAmount);
   };
 
-  const selectPaymentMethod = (methodId: string) => {
-    setPaymentMethod(methodId);
-    setShowPaymentPicker(false);
+  const saveExpense = (numAmount: number) => {
+    try {
+      addTransaction({
+        userId: user?.id || 'local',
+        walletId,
+        type: 'expense',
+        amount: numAmount,
+        category: selectedCategory?.name || 'Other',
+        date: new Date(date).toISOString(),
+        notes: notes || undefined,
+      });
+
+      Alert.alert('Success', 'Expense added successfully!', [{ text: 'OK', onPress: () => router.back() }]);
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      Alert.alert('Error', 'Failed to add expense. Please try again.');
+    }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+    <View style={fs.container}>
+      <View style={fs.header}>
+        <Pressable onPress={() => router.back()} style={fs.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>Add Expense</Text>
-        <View style={styles.placeholder} />
+        <Text style={[fs.title, { color: colors.text }]}>Add Expense</Text>
+        <View style={fs.placeholder} />
       </View>
 
-      {/* Scrollable Content */}
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled">
-        
-        {/* Amount Field */}
-        <View style={[styles.field, { backgroundColor: colors.backgroundElevated }]}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Amount</Text>
-          <View style={styles.amountContainer}>
-            <Text style={[styles.currency, { color: colors.text }]}>₦</Text>
-            <TextInput
-              style={[styles.amountInput, { color: colors.text }]}
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="numeric"
-              placeholder="0"
-              placeholderTextColor={colors.textSecondary}
-            />
+      <ScrollView style={fs.scrollView} contentContainerStyle={fs.content} keyboardShouldPersistTaps="handled">
+        <View style={[fs.heroAmountCard, { borderColor: colors.border }]}>
+          <View style={[fs.heroAmountTop, { backgroundColor: colors.expenseSoft }]}>
+            <Text style={[fs.heroAmountLabel, { color: colors.expense }]}>Amount</Text>
+          </View>
+          <View style={fs.heroAmountBody}>
+            <View style={fs.amountContainer}>
+              <Text style={[fs.currency, { color: colors.text }]}>{currencySymbol}</Text>
+              <TextInput
+                style={[fs.amountInput, { color: colors.text }]}
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={colors.textTertiary}
+                autoFocus
+              />
+            </View>
           </View>
         </View>
 
-        {/* Category Picker */}
-        <View style={[styles.field, { backgroundColor: colors.backgroundElevated }]}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Category</Text>
-          <Pressable 
-            style={styles.picker}
+        <View style={fs.field}>
+          <Text style={fs.fieldLabel}>Category</Text>
+          <Pressable
+            style={fs.picker}
             onPress={() => {
               setShowCategoryPicker(!showCategoryPicker);
-              setShowPaymentPicker(false);
+              setShowWalletPicker(false);
             }}>
-            <View style={styles.pickerLeft}>
-              <View style={[styles.iconCircle, { backgroundColor: colors.primary }]}>
-                <Ionicons name={selectedCategory?.icon as any} size={20} color="#FFFFFF" />
+            <View style={fs.pickerLeft}>
+              <View style={[fs.iconCircle, { backgroundColor: colors.expenseSoft }]}>
+                <Ionicons name={selectedCategory?.icon as any} size={20} color={colors.expense} />
               </View>
-              <Text style={[styles.pickerText, { color: colors.text }]}>
-                {selectedCategory?.name}
-              </Text>
+              <Text style={[fs.pickerText, { color: colors.text }]}>{selectedCategory?.name}</Text>
             </View>
-            <Ionicons 
-              name={showCategoryPicker ? "chevron-up" : "chevron-down"} 
-              size={20} 
-              color={colors.textSecondary} 
+            <Ionicons
+              name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textTertiary}
             />
           </Pressable>
 
-          {/* Category Dropdown */}
           {showCategoryPicker && (
-            <View style={[styles.dropdown, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
+            <View style={[fs.dropdown, { backgroundColor: colors.backgroundElevated }]}>
               {CATEGORIES.map((cat) => (
                 <Pressable
                   key={cat.id}
-                  style={[
-                    styles.dropdownItem,
-                    category === cat.id && { backgroundColor: colors.primarySoft },
-                  ]}
-                  onPress={() => selectCategory(cat.id)}>
-                  <View style={styles.pickerLeft}>
-                    <View style={[styles.iconCircleSmall, { backgroundColor: colors.primary }]}>
-                      <Ionicons name={cat.icon as any} size={16} color="#FFFFFF" />
+                  style={[fs.dropdownItem, category === cat.id && { backgroundColor: colors.expenseSoft }]}
+                  onPress={() => {
+                    setCategory(cat.id);
+                    setShowCategoryPicker(false);
+                  }}>
+                  <View style={fs.pickerLeft}>
+                    <View style={[fs.iconCircleSmall, { backgroundColor: colors.expenseSoft }]}>
+                      <Ionicons name={cat.icon as any} size={16} color={colors.expense} />
                     </View>
-                    <Text style={[styles.dropdownText, { color: colors.text }]}>
-                      {cat.name}
-                    </Text>
+                    <Text style={[fs.dropdownText, { color: colors.text }]}>{cat.name}</Text>
                   </View>
-                  {category === cat.id && (
-                    <Ionicons name="checkmark" size={20} color={colors.primary} />
-                  )}
+                  {category === cat.id && <Ionicons name="checkmark" size={20} color={colors.expense} />}
                 </Pressable>
               ))}
             </View>
           )}
         </View>
 
-        {/* Date Field - Editable */}
-        <View style={[styles.field, { backgroundColor: colors.backgroundElevated }]}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Date</Text>
-          <View style={styles.picker}>
-            <TextInput
-              style={[styles.dateInput, { color: colors.text }]}
-              value={date}
-              onChangeText={setDate}
-              placeholder="Select date"
-              placeholderTextColor={colors.textSecondary}
-            />
-            <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-          </View>
-        </View>
-
-        {/* Payment Method Picker */}
-        <View style={[styles.field, { backgroundColor: colors.backgroundElevated }]}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Payment Method</Text>
-          <Pressable 
-            style={styles.picker}
+        <View style={fs.field}>
+          <Text style={fs.fieldLabel}>Wallet</Text>
+          <Pressable
+            style={fs.picker}
             onPress={() => {
-              setShowPaymentPicker(!showPaymentPicker);
+              setShowWalletPicker(!showWalletPicker);
               setShowCategoryPicker(false);
             }}>
-            <View style={styles.pickerLeft}>
-              <View style={[styles.iconCircle, { backgroundColor: colors.primary }]}>
-                <Ionicons name={selectedPayment?.icon as any} size={20} color="#FFFFFF" />
+            <View style={fs.pickerLeft}>
+              <View style={[fs.iconCircle, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="wallet" size={20} color={colors.primary} />
               </View>
-              <Text style={[styles.pickerText, { color: colors.text }]}>
-                {selectedPayment?.name}
-              </Text>
+              <View>
+                <Text style={[fs.pickerText, { color: colors.text }]}>
+                  {selectedWallet?.name || 'Select wallet'}
+                </Text>
+                {selectedWallet && (
+                  <Text style={[styles.walletBalance, { color: colors.textSecondary }]}>
+                    Balance: {currencySymbol}
+                    {selectedWallet.balance.toLocaleString()}
+                  </Text>
+                )}
+              </View>
             </View>
-            <Ionicons 
-              name={showPaymentPicker ? "chevron-up" : "chevron-down"} 
-              size={20} 
-              color={colors.textSecondary} 
+            <Ionicons
+              name={showWalletPicker ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textTertiary}
             />
           </Pressable>
 
-          {/* Payment Method Dropdown */}
-          {showPaymentPicker && (
-            <View style={[styles.dropdown, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
-              {PAYMENT_METHODS.map((method) => (
-                <Pressable
-                  key={method.id}
-                  style={[
-                    styles.dropdownItem,
-                    paymentMethod === method.id && { backgroundColor: colors.primarySoft },
-                  ]}
-                  onPress={() => selectPaymentMethod(method.id)}>
-                  <View style={styles.pickerLeft}>
-                    <View style={[styles.iconCircleSmall, { backgroundColor: colors.primary }]}>
-                      <Ionicons name={method.icon as any} size={16} color="#FFFFFF" />
+          {showWalletPicker && (
+            <View style={[fs.dropdown, { backgroundColor: colors.backgroundElevated }]}>
+              {wallets.length === 0 ? (
+                <View style={fs.dropdownItem}>
+                  <Text style={[fs.dropdownText, { color: colors.textSecondary }]}>No wallets available</Text>
+                </View>
+              ) : (
+                wallets.map((wallet) => (
+                  <Pressable
+                    key={wallet.id}
+                    style={[fs.dropdownItem, walletId === wallet.id && { backgroundColor: colors.primarySoft }]}
+                    onPress={() => {
+                      setWalletId(wallet.id);
+                      setShowWalletPicker(false);
+                    }}>
+                    <View style={fs.pickerLeft}>
+                      <View style={[fs.iconCircleSmall, { backgroundColor: colors.primarySoft }]}>
+                        <Ionicons name="wallet" size={16} color={colors.primary} />
+                      </View>
+                      <View>
+                        <Text style={[fs.dropdownText, { color: colors.text }]}>{wallet.name}</Text>
+                        <Text style={[styles.walletBalance, { color: colors.textSecondary }]}>
+                          {currencySymbol}
+                          {wallet.balance.toLocaleString()}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={[styles.dropdownText, { color: colors.text }]}>
-                      {method.name}
-                    </Text>
-                  </View>
-                  {paymentMethod === method.id && (
-                    <Ionicons name="checkmark" size={20} color={colors.primary} />
-                  )}
-                </Pressable>
-              ))}
+                    {walletId === wallet.id && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                  </Pressable>
+                ))
+              )}
             </View>
           )}
         </View>
 
-        {/* Notes Field */}
-        <View style={[styles.field, { backgroundColor: colors.backgroundElevated }]}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Notes (Optional)</Text>
+        <View style={fs.field}>
+          <Text style={fs.fieldLabel}>Date</Text>
+          <View style={fs.picker}>
+            <TextInput
+              style={[fs.dateInput, { color: colors.text }]}
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={colors.textTertiary}
+            />
+            <Ionicons name="calendar-outline" size={20} color={colors.textTertiary} />
+          </View>
+        </View>
+
+        <View style={fs.field}>
+          <Text style={fs.fieldLabel}>Notes (Optional)</Text>
           <TextInput
-            style={[styles.notesInput, { color: colors.text }]}
+            style={[fs.notesInput, { color: colors.text }]}
             value={notes}
             onChangeText={setNotes}
             placeholder="Add a note..."
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={colors.textTertiary}
             multiline
             numberOfLines={3}
           />
         </View>
       </ScrollView>
 
-      {/* Save Button */}
-      <View style={[styles.footer, { backgroundColor: colors.background }]}>
-        <Button title="Save Expense" onPress={handleSave} style={styles.saveButton} />
+      <View style={fs.footer}>
+        <Button title="Save Expense" onPress={handleSave} style={fs.saveButton} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  placeholder: {
-    width: 40,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 20,
-    gap: 16,
-  },
-  field: {
-    borderRadius: 8,
-    padding: 20,
-  },
-  fieldLabel: {
+  walletBalance: {
     fontSize: 13,
-    marginBottom: 12,
-    fontWeight: '500',
-  },
-  amountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  currency: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginRight: 8,
-  },
-  amountInput: {
-    fontSize: 28,
-    fontWeight: '700',
-    flex: 1,
-    padding: 0,
-  },
-  picker: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pickerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconCircleSmall: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pickerText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  dateInput: {
-    fontSize: 16,
-    fontWeight: '500',
-    flex: 1,
-    padding: 0,
-  },
-  notesInput: {
-    fontSize: 16,
-    padding: 0,
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  dropdown: {
-    marginTop: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    paddingHorizontal: 16,
-  },
-  dropdownText: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  footer: {
-    padding: 20,
-    paddingBottom: 32,
-    borderTopWidth: 0,
-  },
-  saveButton: {
-    width: '100%',
+    marginTop: 2,
   },
 });

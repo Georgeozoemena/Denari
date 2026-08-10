@@ -16,11 +16,14 @@ export default function RootLayout() {
     <AppProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="splash" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
         <Stack.Screen name="transfer" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="create-budget" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="create-goal" options={{ presentation: 'modal' }} />
       </Stack>
     </AppProvider>
   );

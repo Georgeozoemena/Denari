@@ -1,20 +1,43 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { savePIN } from '@/services/pin';
+
 export default function SetupPinScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const name = params.name as string;
+  const email = params.email as string;
+  const phone = params.phone as string;
+  
   const [pin, setPin] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleKeyPress = (num: string) => {
+  const handleKeyPress = async (num: string) => {
     if (pin.length >= 4) return;
     const newPin = pin + num;
     setPin(newPin);
 
     if (newPin.length === 4) {
-      setTimeout(() => {
-        router.push('/(auth)/choose-currency');
-      }, 300);
+      setIsLoading(true);
+      try {
+        // Save PIN securely
+        await savePIN(newPin);
+        
+        setTimeout(() => {
+          // Navigate to profile setup
+          router.push({
+            pathname: '/(auth)/profile-setup',
+            params: { name, email, phone },
+          });
+        }, 300);
+      } catch (error) {
+        alert('Failed to save PIN. Please try again.');
+        setPin('');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 

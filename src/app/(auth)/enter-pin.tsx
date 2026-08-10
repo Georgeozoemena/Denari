@@ -1,25 +1,38 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { verifyPIN } from '@/services/pin';
 
 export default function EnterPinScreen() {
   const router = useRouter();
   const colors = Colors.light;
 
   const [pin, setPin] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleKeyPress = (num: string) => {
-    if (pin.length >= 4) return;
+  const handleKeyPress = async (num: string) => {
+    if (pin.length >= 4 || isVerifying) return;
     const newPin = pin + num;
     setPin(newPin);
 
     if (newPin.length === 4) {
-      setTimeout(() => {
-        // Go straight to dashboard tabs
-        router.replace('/(tabs)');
-      }, 300);
+      setIsVerifying(true);
+      
+      // Verify PIN with rate limiting
+      const result = await verifyPIN(newPin);
+      
+      if (result.success) {
+        setTimeout(() => {
+          // Go to dashboard
+          router.replace('/(tabs)');
+        }, 300);
+      } else {
+        Alert.alert('Incorrect PIN', result.message || 'The PIN you entered is incorrect.');
+        setPin('');
+        setIsVerifying(false);
+      }
     }
   };
 

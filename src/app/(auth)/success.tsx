@@ -2,9 +2,33 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
+import { useApp } from '@/context/AppContext';
 
 export default function SuccessScreen() {
   const router = useRouter();
+  const { updateUser, addWallet, user } = useApp();
+
+  const handleGoToDashboard = () => {
+    // Mark onboarding as complete
+    updateUser({ hasCompletedOnboarding: true });
+    
+    // Create default wallet if user doesn't have one
+    if (user) {
+      addWallet({
+        userId: user.id,
+        name: 'Cash',
+        type: 'cash',
+        balance: 0,
+        currency: user.currency,
+        isDefault: true,
+        icon: 'wallet',
+        color: '#FD7E15',
+      });
+    }
+    
+    // Navigate to dashboard
+    router.replace('/(tabs)');
+  };
 
   return (
     <View style={styles.container}>
@@ -55,7 +79,7 @@ export default function SuccessScreen() {
 
       <Button
         title="Go to Dashboard"
-        onPress={() => router.replace('/(tabs)')}
+        onPress={handleGoToDashboard}
         style={styles.button}
       />
     </View>

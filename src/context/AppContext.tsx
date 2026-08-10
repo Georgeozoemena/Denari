@@ -1,20 +1,28 @@
 import { DEFAULT_STATE, loadState, saveState } from '@/services/storage';
-import type { AppState, Budget, SavingsGoal, Transaction, UserProfile } from '@/types';
+import type { AppState, Budget, SavingsGoal, Transaction, UserProfile, Wallet } from '@/types';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 interface AppContextType extends AppState {
   // User actions
   setUser: (user: UserProfile) => void;
+  updateUser: (updates: Partial<UserProfile>) => void;
   logout: () => void;
   
+  // Wallet actions
+  addWallet: (wallet: Omit<Wallet, 'id'>) => void;
+  updateWallet: (id: string, updates: Partial<Wallet>) => void;
+  deleteWallet: (id: string) => void;
+  updateWalletBalance: (id: string, amount: number) => void;
+  
   // Transaction actions
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => void;
   deleteTransaction: (id: string) => void;
   updateTransaction: (id: string, updates: Partial<Transaction>) => void;
   
   // Budget actions
   addBudget: (budget: Omit<Budget, 'id'>) => void;
   updateBudget: (id: string, updates: Partial<Budget>) => void;
+  updateBudgetSpending: (categoryName: string, amount: number) => void;
   
   // Savings goal actions
   addSavingsGoal: (goal: Omit<SavingsGoal, 'id'>) => void;
@@ -51,20 +59,99 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, user, isAuthenticated: true }));
   };
 
+  const updateUser = (updates: Partial<UserProfile>) => {
+    setState((prev) => ({
+      ...prev,
+      user: prev.user ? { ...prev.user, ...updates } : null,
+    }));
+  };
+
   const logout = () => {
     setState(DEFAULT_STATE);
   };
 
-  // Transaction actions
-  const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
-    const newTransaction: Transaction = {
-      ...transaction,
+  // Wallet actions
+  const addWallet = (wallet: Omit<Wallet, 'id'>) => {
+    const newWallet: Wallet = {
+      ...wallet,
       id: Date.now().toString(),
     };
     setState((prev) => ({
       ...prev,
-      transactions: [newTransaction, ...prev.transactions],
+      wallets: [newWallet, ...prev.wallets],
     }));
+  };
+
+  const updateWallet = (id: string, updates: Partial<Wallet>) => {
+    setState((prev) => ({
+      ...prev,
+      wallets: prev.wallets.map((w) =>
+        w.id === id ? { ...w, ...updates } : w
+      ),
+    }));
+  };
+
+  const deleteWallet = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      wallets: prev.wallets.filter((w) => w.id !== id),
+    }));
+  };
+
+  const updateWalletBalance = (id: string, amount: number) => {
+    setState((prev) => ({
+      ...prev,
+      wallets: prev.wallets.map((w) =>
+        w.id === id ? { ...w, balance: w.balance + amount } : w
+      ),
+    }));
+  };
+
+  // Transaction actions with auto-update of wallet balance and budget
+  const addTransaction = (transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
+    const newTransaction: Transaction = {
+      ...transaction,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+    };
+    
+    setState((prev) => {
+      const newState = { ...prev };
+      
+      // Add transaction
+      newState.transactions = [newTransaction, ...prev.transactions];
+      
+      // Update wallet balance
+      const walletIndex = newState.wallets.findIndex(w => w.id === transaction.walletId);
+      if (walletIndex !== -1) {
+        const balanceChange = transaction.type === 'income' ? transaction.amount : -transaction.amount;
+        newState.wallets[walletIndex] = {
+          ...newState.wallets[walletIndex],
+          balance: newState.wallets[walletIndex].balance + balanceChange,
+        };
+      }
+      
+      // Update budget spending if expense
+      if (transaction.type === 'expense') {
+        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+        const budgetIndex = newState.budgets.findIndex(b => b.month === currentMonth);
+        
+        if (budgetIndex !== -1) {
+          const categoryIndex = newState.budgets[budgetIndex].categories.findIndex(
+            c => c.name === transaction.category
+          );
+          
+          if (categoryIndex !== -1) {
+            newState.budgets[budgetIndex].categories[categoryIndex] = {
+              ...newState.budgets[budgetIndex].categories[categoryIndex],
+              spent: newState.budgets[budgetIndex].categories[categoryIndex].spent + transaction.amount,
+            };
+          }
+        }
+      }
+      
+      return newState;
+    });
   };
 
   const deleteTransaction = (id: string) => {
@@ -104,6 +191,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const updateBudgetSpending = (categoryName: string, amount: number) => {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    setState((prev) => ({
+      ...prev,
+      budgets: prev.budgets.map((b) => {
+        if (b.month !== currentMonth) return b;
+        return {
+          ...b,
+          categories: b.categories.map((c) =>
+            c.name === categoryName
+              ? { ...c, spent: c.spent + amount }
+              : c
+          ),
+        };
+      }),
+    }));
+  };
+
   // Savings goal actions
   const addSavingsGoal = (goal: Omit<SavingsGoal, 'id'>) => {
     const newGoal: SavingsGoal = {
@@ -135,12 +240,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppContextType = {
     ...state,
     setUser,
+    updateUser,
     logout,
+    addWallet,
+    updateWallet,
+    deleteWallet,
+    updateWalletBalance,
     addTransaction,
     deleteTransaction,
     updateTransaction,
     addBudget,
     updateBudget,
+    updateBudgetSpending,
     addSavingsGoal,
     updateSavingsGoal,
     deleteSavingsGoal,

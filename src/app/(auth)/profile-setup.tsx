@@ -1,4 +1,5 @@
-import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -8,52 +9,70 @@ import { Colors } from '@/constants/theme';
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const colors = Colors.light;
 
-  const [name, setName] = useState('');
-  const [dob, setDob] = useState('');
-  const [occupation, setOccupation] = useState('');
+  // Pre-fill name from sign-up if available
+  const [firstName, setFirstName] = useState((params.name as string)?.split(' ')[0] || '');
+  const [lastName, setLastName] = useState((params.name as string)?.split(' ').slice(1).join(' ') || '');
+  const email = params.email as string;
+  const phone = params.phone as string;
+
+  const handleContinue = () => {
+    if (!firstName) {
+      alert('Please enter your first name');
+      return;
+    }
+    
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    // Navigate to currency selection
+    router.push({
+      pathname: '/(auth)/choose-currency',
+      params: { name: fullName, email, phone },
+    });
+  };
 
   return (
     <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]}>
       <View style={styles.container}>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </Pressable>
+
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Tell us about you</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Complete Your Profile</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            This helps us personalize your experience.
+            Let's get to know you better
           </Text>
         </View>
 
         <View style={styles.avatarSection}>
           <Pressable style={[styles.avatarCircle, { backgroundColor: colors.primarySoft }]}>
-            <Text style={[styles.avatarPlaceholderText, { color: colors.primary }]}>📸</Text>
+            <Ionicons name="person" size={40} color={colors.primary} />
           </Pressable>
-          <Text style={[styles.avatarText, { color: colors.textSecondary }]}>Add Profile Picture</Text>
+          <Pressable>
+            <Text style={[styles.avatarText, { color: colors.primary }]}>Add Photo (Optional)</Text>
+          </Pressable>
         </View>
 
         <View style={styles.form}>
           <Input
-            label="Full Name"
-            placeholder="Enter your full name"
-            value={name}
-            onChangeText={setName}
+            label="First Name"
+            placeholder="Enter your first name"
+            value={firstName}
+            onChangeText={setFirstName}
           />
           <Input
-            label="Date of Birth"
-            placeholder="YYYY-MM-DD"
-            value={dob}
-            onChangeText={setDob}
-          />
-          <Input
-            label="Occupation"
-            placeholder="What is your occupation?"
-            value={occupation}
-            onChangeText={setOccupation}
+            label="Last Name (Optional)"
+            placeholder="Enter your last name"
+            value={lastName}
+            onChangeText={setLastName}
           />
 
           <Button
             title="Continue"
-            onPress={() => router.push('/(auth)/success')}
+            onPress={handleContinue}
             style={styles.submitBtn}
           />
         </View>
@@ -68,7 +87,13 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 24,
-    paddingTop: 80,
+    paddingTop: 60,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   header: {
     marginBottom: 32,
@@ -85,7 +110,7 @@ const styles = StyleSheet.create({
   avatarSection: {
     alignItems: 'center',
     marginBottom: 32,
-    gap: 10,
+    gap: 12,
   },
   avatarCircle: {
     width: 90,
@@ -94,12 +119,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarPlaceholderText: {
-    fontSize: 32,
-  },
   avatarText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   form: {
     gap: 8,

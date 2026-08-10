@@ -17,9 +17,20 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
 
   const handleRegister = () => {
+    // In production, validate inputs and call API
+    if (!name || !email || !password) {
+      alert('Please fill in all required fields');
+      return;
+    }
+    
+    // Navigate to OTP verification
     router.push({
       pathname: '/(auth)/verify-otp',
-      params: { phone: phone || email },
+      params: { 
+        phone: phone || email,
+        name,
+        email,
+      },
     });
   };
 

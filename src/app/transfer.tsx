@@ -17,7 +17,7 @@ const ACCOUNTS = [
 export default function TransferScreen() {
   const router = useRouter();
   const colors = Colors.light;
-  const { addTransaction } = useApp();
+  const { addTransaction, wallets, user } = useApp();
 
   const [amount, setAmount] = useState('');
   const [fromAccount, setFromAccount] = useState('gtbank');

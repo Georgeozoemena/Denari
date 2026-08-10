@@ -6,6 +6,7 @@ const STORAGE_KEY = '@denari:app_state';
 // Default state
 export const DEFAULT_STATE: AppState = {
   user: null,
+  wallets: [],
   transactions: [],
   budgets: [],
   savingsGoals: [],
@@ -17,7 +18,12 @@ export const loadState = async (): Promise<AppState> => {
   try {
     const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
     if (jsonValue != null) {
-      return JSON.parse(jsonValue);
+      const state = JSON.parse(jsonValue);
+      // Ensure wallets array exists (backward compatibility)
+      if (!state.wallets) {
+        state.wallets = [];
+      }
+      return state;
     }
     return DEFAULT_STATE;
   } catch (error) {

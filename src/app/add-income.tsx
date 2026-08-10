@@ -16,28 +16,21 @@ const INCOME_CATEGORIES = [
   { id: 'other', name: 'Other', icon: 'ellipsis-horizontal' },
 ];
 
-const PAYMENT_METHODS = [
-  { id: 'gtbank', name: 'GTBank •••• 5678', icon: 'card' },
-  { id: 'cash', name: 'Cash', icon: 'cash' },
-  { id: 'zenith', name: 'Zenith Bank •••• 1234', icon: 'card' },
-  { id: 'access', name: 'Access Bank •••• 9012', icon: 'card' },
-];
-
 export default function AddIncomeScreen() {
   const router = useRouter();
   const colors = Colors.light;
-  const { addTransaction } = useApp();
+  const { addTransaction, wallets, user } = useApp();
 
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('salary');
-  const [date, setDate] = useState(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }));
-  const [paymentMethod, setPaymentMethod] = useState('gtbank');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [walletId, setWalletId] = useState(wallets[0]?.id || '');
   const [notes, setNotes] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [showPaymentPicker, setShowPaymentPicker] = useState(false);
+  const [showWalletPicker, setShowWalletPicker] = useState(false);
 
   const selectedCategory = INCOME_CATEGORIES.find(c => c.id === category);
-  const selectedPayment = PAYMENT_METHODS.find(p => p.id === paymentMethod);
+  const selectedWallet = wallets.find(w => w.id === walletId);
 
   const handleSave = () => {
     // Validate amount
@@ -47,18 +40,31 @@ export default function AddIncomeScreen() {
       return;
     }
 
-    // Save transaction
-    addTransaction({
-      type: 'income',
-      amount: numAmount,
-      category: selectedCategory?.name || 'Other',
-      date: new Date().toISOString(),
-      notes,
-      paymentMethod: selectedPayment?.name || 'Cash',
-    });
+    // Validate wallet
+    if (!walletId || !selectedWallet) {
+      Alert.alert('Select Wallet', 'Please select a wallet to receive this income');
+      return;
+    }
 
-    Alert.alert('Success', 'Income added successfully!');
-    router.back();
+    try {
+      // Add transaction (will auto-update wallet balance)
+      addTransaction({
+        userId: user?.id || 'local',
+        walletId: walletId,
+        type: 'income',
+        amount: numAmount,
+        category: selectedCategory?.name || 'Other',
+        date: new Date(date).toISOString(),
+        notes: notes || undefined,
+      });
+
+      Alert.alert('Success', 'Income added successfully!', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      console.error('Error adding income:', error);
+      Alert.alert('Error', 'Failed to add income. Please try again.');
+    }
   };
 
   const selectCategory = (categoryId: string) => {
@@ -66,9 +72,9 @@ export default function AddIncomeScreen() {
     setShowCategoryPicker(false);
   };
 
-  const selectPaymentMethod = (methodId: string) => {
-    setPaymentMethod(methodId);
-    setShowPaymentPicker(false);
+  const selectWallet = (id: string) => {
+    setWalletId(id);
+    setShowWalletPicker(false);
   };
 
   return (
@@ -92,7 +98,9 @@ export default function AddIncomeScreen() {
         <View style={[styles.field, { backgroundColor: colors.backgroundElevated }]}>
           <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Amount</Text>
           <View style={styles.amountContainer}>
-            <Text style={[styles.currency, { color: colors.text }]}>₦</Text>
+            <Text style={[styles.currency, { color: colors.text }]}>
+              {user?.currency === 'USD' ? '$' : user?.currency === 'EUR' ? '€' : user?.currency === 'GBP' ? '£' : '₦'}
+            </Text>
             <TextInput
               style={[styles.amountInput, { color: colors.text }]}
               value={amount}
@@ -100,6 +108,7 @@ export default function AddIncomeScreen() {
               keyboardType="numeric"
               placeholder="0"
               placeholderTextColor={colors.textSecondary}
+              autoFocus
             />
           </View>
         </View>
@@ -111,7 +120,7 @@ export default function AddIncomeScreen() {
             style={styles.picker}
             onPress={() => {
               setShowCategoryPicker(!showCategoryPicker);
-              setShowPaymentPicker(false);
+              setShowWalletPicker(false);
             }}>
             <View style={styles.pickerLeft}>
               <View style={[styles.iconCircle, { backgroundColor: '#34C759' }]}>
@@ -164,61 +173,81 @@ export default function AddIncomeScreen() {
               style={[styles.dateInput, { color: colors.text }]}
               value={date}
               onChangeText={setDate}
-              placeholder="Select date"
+              placeholder="YYYY-MM-DD"
               placeholderTextColor={colors.textSecondary}
             />
             <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
           </View>
         </View>
 
-        {/* Payment Method Picker */}
+        {/* Wallet Picker */}
         <View style={[styles.field, { backgroundColor: colors.backgroundElevated }]}>
           <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Received In</Text>
           <Pressable 
             style={styles.picker}
             onPress={() => {
-              setShowPaymentPicker(!showPaymentPicker);
+              setShowWalletPicker(!showWalletPicker);
               setShowCategoryPicker(false);
             }}>
             <View style={styles.pickerLeft}>
               <View style={[styles.iconCircle, { backgroundColor: '#34C759' }]}>
-                <Ionicons name={selectedPayment?.icon as any} size={20} color="#FFFFFF" />
+                <Ionicons name="wallet" size={20} color="#FFFFFF" />
               </View>
-              <Text style={[styles.pickerText, { color: colors.text }]}>
-                {selectedPayment?.name}
-              </Text>
+              <View>
+                <Text style={[styles.pickerText, { color: colors.text }]}>
+                  {selectedWallet?.name || 'Select wallet'}
+                </Text>
+                {selectedWallet && (
+                  <Text style={[styles.walletBalance, { color: colors.textSecondary }]}>
+                    Balance: {user?.currency || '₦'}{selectedWallet.balance.toLocaleString()}
+                  </Text>
+                )}
+              </View>
             </View>
             <Ionicons 
-              name={showPaymentPicker ? "chevron-up" : "chevron-down"} 
+              name={showWalletPicker ? "chevron-up" : "chevron-down"} 
               size={20} 
               color={colors.textSecondary} 
             />
           </Pressable>
 
-          {/* Payment Method Dropdown */}
-          {showPaymentPicker && (
+          {/* Wallet Dropdown */}
+          {showWalletPicker && (
             <View style={[styles.dropdown, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
-              {PAYMENT_METHODS.map((method) => (
-                <Pressable
-                  key={method.id}
-                  style={[
-                    styles.dropdownItem,
-                    paymentMethod === method.id && { backgroundColor: '#E8F5E9' },
-                  ]}
-                  onPress={() => selectPaymentMethod(method.id)}>
-                  <View style={styles.pickerLeft}>
-                    <View style={[styles.iconCircleSmall, { backgroundColor: '#34C759' }]}>
-                      <Ionicons name={method.icon as any} size={16} color="#FFFFFF" />
+              {wallets.length === 0 ? (
+                <View style={styles.dropdownItem}>
+                  <Text style={[styles.dropdownText, { color: colors.textSecondary }]}>
+                    No wallets available
+                  </Text>
+                </View>
+              ) : (
+                wallets.map((wallet) => (
+                  <Pressable
+                    key={wallet.id}
+                    style={[
+                      styles.dropdownItem,
+                      walletId === wallet.id && { backgroundColor: '#E8F5E9' },
+                    ]}
+                    onPress={() => selectWallet(wallet.id)}>
+                    <View style={styles.pickerLeft}>
+                      <View style={[styles.iconCircleSmall, { backgroundColor: '#34C759' }]}>
+                        <Ionicons name="wallet" size={16} color="#FFFFFF" />
+                      </View>
+                      <View>
+                        <Text style={[styles.dropdownText, { color: colors.text }]}>
+                          {wallet.name}
+                        </Text>
+                        <Text style={[styles.walletBalance, { color: colors.textSecondary, fontSize: 12 }]}>
+                          {user?.currency || '₦'}{wallet.balance.toLocaleString()}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={[styles.dropdownText, { color: colors.text }]}>
-                      {method.name}
-                    </Text>
-                  </View>
-                  {paymentMethod === method.id && (
-                    <Ionicons name="checkmark" size={20} color="#34C759" />
-                  )}
-                </Pressable>
-              ))}
+                    {walletId === wallet.id && (
+                      <Ionicons name="checkmark" size={20} color="#34C759" />
+                    )}
+                  </Pressable>
+                ))
+              )}
             </View>
           )}
         </View>
@@ -347,6 +376,10 @@ const styles = StyleSheet.create({
     padding: 0,
     minHeight: 60,
     textAlignVertical: 'top',
+  },
+  walletBalance: {
+    fontSize: 13,
+    marginTop: 2,
   },
   dropdown: {
     marginTop: 12,
