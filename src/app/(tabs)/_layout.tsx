@@ -1,64 +1,86 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Elevation, Radius } from '@/constants/theme';
 
+
+function TabPillIcon({
+  focused,
+  name,
+  activeName,
+}: {
+  focused: boolean;
+  name: keyof typeof Ionicons.glyphMap;
+  activeName: keyof typeof Ionicons.glyphMap;
+}) {
+  const colors = Colors.light;
+  return (
+    <View style={[styles.tabPill, focused && { backgroundColor: colors.navy }]}>
+      <Ionicons name={focused ? activeName : name} size={20} color={focused ? colors.primary : colors.textTertiary} />
+    </View>
+  );
+}
+
 export default function TabLayout() {
   const colors = Colors.light;
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: colors.backgroundElevated,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: Platform.select({ ios: 88, android: 72, default: 72 }),
-          paddingBottom: Platform.select({ ios: 28, android: 12, default: 12 }),
-          paddingTop: 8,
-          ...Elevation.soft,
-        },
+        tabBarActiveTintColor: colors.navy,
+        tabBarInactiveTintColor: colors.textTertiary,
         tabBarLabelStyle: {
+          fontFamily: 'Sora_500Medium',
           fontSize: 11,
-          fontWeight: '500',
+          lineHeight: 14,
+          marginTop: 2,
+        },
+
+        tabBarStyle: {
+          marginHorizontal: 24,
+          marginBottom: 8,
+          height: 78 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: 10 + insets.bottom,
+          borderRadius: Radius.full,
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 0,
+          borderWidth: 1,
+          borderColor: 'rgba(0,0,0,0.04)',
+          ...Elevation.card,
+        },
+        tabBarItemStyle: {
+          paddingTop: 0,
         },
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
-          ),
+          tabBarIcon: ({ focused }) => <TabPillIcon focused={focused} name="home-outline" activeName="home" />,
         }}
       />
       <Tabs.Screen
         name="transactions"
         options={{
           title: 'Activity',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="receipt-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabPillIcon focused={focused} name="receipt-outline" activeName="receipt" />
           ),
         }}
       />
       <Tabs.Screen
         name="add"
         options={{
-          title: '',
+          title: 'Add',
+
           tabBarIcon: () => (
-            <View
-              style={[
-                styles.fab,
-                {
-                  backgroundColor: colors.primary,
-                  ...Elevation.raised,
-                },
-              ]}>
-              <Ionicons name="add" size={28} color="#FFFFFF" />
+            <View style={[styles.fab, { backgroundColor: colors.primary }, Elevation.raised]}>
+              <Ionicons name="add" size={24} color={colors.navy} />
             </View>
           ),
         }}
@@ -67,8 +89,8 @@ export default function TabLayout() {
         name="budgets"
         options={{
           title: 'Budgets',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabPillIcon focused={focused} name="wallet-outline" activeName="wallet" />
           ),
         }}
       />
@@ -76,8 +98,8 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabPillIcon focused={focused} name="person-outline" activeName="person" />
           ),
         }}
       />
@@ -99,12 +121,19 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  fab: {
-    width: 56,
-    height: 56,
+  tabPill: {
+    width: 46,
+    height: 30,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -28,
+  },
+  fab: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -22,
   },
 });
